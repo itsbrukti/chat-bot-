@@ -14,13 +14,15 @@ public class SyncManager implements Runnable {
     @Override
     public void run() {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
-            System.out.println("Sync server running on port " + port);
+            System.out.println("🔄 Sync Server running on port " + port + " for database: " + dbName);
             
             while (true) {
                 Socket socket = serverSocket.accept();
+                System.out.println("📡 Sync connection accepted on port " + port);
                 new Thread(new SyncHandler(socket, dbName)).start();
             }
         } catch (Exception e) {
+            System.err.println("SyncManager error on port " + port);
             e.printStackTrace();
         }
     }

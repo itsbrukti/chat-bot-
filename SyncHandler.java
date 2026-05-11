@@ -20,42 +20,60 @@ public class SyncHandler implements Runnable {
             PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
             
             String data = in.readLine();
-            if (data == null) return;
+            if (data == null) {
+                socket.close();
+                return;
+            }
             
+            System.out.println("📥 Sync received: " + data);
             String[] parts = data.split("\\|");
             
             switch (parts[0]) {
                 case "REGISTER":
-                    db.registerUser(parts[1], parts[2]);
-                    System.out.println("Synced registration: " + parts[1]);
+                    boolean regSuccess = db.registerUser(parts[1], parts[2]);
+                    System.out.println("✅ Synced registration: " + parts[1] + " - " + (regSuccess ? "Success" : "Failed"));
                     break;
                     
                 case "MESSAGE":
                     int userId = db.getUserId(parts[1]);
                     db.saveMessage(userId, parts[1], parts[2]);
-                    System.out.println("Synced message from " + parts[1]);
+                    System.out.println("💬 Synced message from " + parts[1] + ": " + parts[2]);
                     break;
                     
                 case "GET_USERS":
+                    System.out.println("📋 Sending user list...");
                     List<Map<String, Object>> users = db.getAllUsers();
+                    int userCount = 0;
                     for (Map<String, Object> user : users) {
-                        out.println(user.get("id") + "|" + 
-                                   user.get("username") + "|" + 
-                                   user.get("role") + "|" + 
-                                   user.get("created_at"));
+                        String userData = user.get("id") + "|" + 
+                                         user.get("username") + "|" + 
+                                         user.get("role") + "|" + 
+                                         user.get("created_at");
+                        out.println(userData);
+                        userCount++;
+                        System.out.println("   Sent user: " + user.get("username"));
                     }
                     out.println("END_USERS");
+                    System.out.println("✅ User list sent. Total: " + userCount);
                     break;
                     
                 case "DELETE_USER":
-                    boolean deleted = db.deleteUser(Integer.parseInt(parts[1]), parts[2]);
+                    int userIdToDelete = Integer.parseInt(parts[1]);
+                    String usernameToDelete = parts[2];
+                    boolean deleted = db.deleteUser(userIdToDelete, usernameToDelete);
                     out.println(deleted ? "DELETE_SUCCESS" : "DELETE_FAILED");
-                    System.out.println("Synced delete: " + parts[2]);
+                    System.out.println("🗑️ Delete user: " + usernameToDelete + " - " + (deleted ? "Success" : "Failed"));
+                    break;
+                    
+                default:
+                    System.out.println("⚠️ Unknown sync command: " + parts[0]);
                     break;
             }
             
             socket.close();
+            
         } catch (Exception e) {
+            System.err.println("❌ Error in SyncHandler:");
             e.printStackTrace();
         }
     }

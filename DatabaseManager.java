@@ -13,8 +13,9 @@ public class DatabaseManager {
             String url = "jdbc:mysql://localhost:3306/" + dbName + "?autoReconnect=true&useSSL=false";
             conn = DriverManager.getConnection(url, "root", "");
             createTables();
-            System.out.println("Database connected: " + dbName);
+            System.out.println("✅ Database connected: " + dbName);
         } catch (Exception e) {
+            System.err.println("❌ Failed to connect to database: " + dbName);
             e.printStackTrace();
         }
     }
@@ -45,7 +46,7 @@ public class DatabaseManager {
             ResultSet rs = stmt.executeQuery("SELECT * FROM users WHERE username='admin'");
             if (!rs.next()) {
                 stmt.execute("INSERT INTO users(username, password, role) VALUES('admin', 'admin123', 'admin')");
-                System.out.println("✅ Admin created - Username: admin, Password: admin123");
+                System.out.println("👑 Admin created - Username: admin, Password: admin123");
             }
             
         } catch (Exception e) {
@@ -149,7 +150,9 @@ public class DatabaseManager {
                 user.put("role", rs.getString("role"));
                 user.put("created_at", rs.getTimestamp("created_at"));
                 users.add(user);
+                System.out.println("📋 Loaded user: " + rs.getString("username"));
             }
+            System.out.println("📊 Total users loaded: " + users.size());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -159,12 +162,22 @@ public class DatabaseManager {
     public boolean deleteUser(int userId, String username) {
         try {
             if (username.equals("admin")) {
+                System.out.println("🚫 Attempted to delete admin user - blocked");
                 return false;
             }
             
-            PreparedStatement ps = conn.prepareStatement("DELETE FROM users WHERE id=? AND username != 'admin'");
-            ps.setInt(1, userId);
-            int affected = ps.executeUpdate();
+            // First delete user's messages
+            PreparedStatement ps1 = conn.prepareStatement("DELETE FROM messages WHERE user_id=?");
+            ps1.setInt(1, userId);
+            int messagesDeleted = ps1.executeUpdate();
+            System.out.println("📧 Deleted " + messagesDeleted + " messages for user " + username);
+            
+            // Then delete the user
+            PreparedStatement ps2 = conn.prepareStatement("DELETE FROM users WHERE id=? AND username != 'admin'");
+            ps2.setInt(1, userId);
+            int affected = ps2.executeUpdate();
+            
+            System.out.println("🗑️ Delete user " + username + ": " + (affected > 0 ? "Success" : "Failed"));
             return affected > 0;
         } catch (Exception e) {
             e.printStackTrace();

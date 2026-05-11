@@ -14,6 +14,7 @@ public class ClientHandler implements Runnable {
     private DatabaseManager db;
     private int serverPort;
     private SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
+    private boolean authenticated = false;
     
     public ClientHandler(Socket socket, String dbName, int serverPort) {
         this.socket = socket;
@@ -30,6 +31,7 @@ public class ClientHandler implements Runnable {
             // Authentication
             while (true) {
                 String choice = in.readLine();
+                if (choice == null) return;
                 
                 if ("REGISTER".equals(choice)) {
                     String user = in.readLine();
@@ -39,6 +41,7 @@ public class ClientHandler implements Runnable {
                     if (success) {
                         syncRegister(user, pass);
                         out.println("REGISTER_SUCCESS");
+                        System.out.println("✅ New user registered: " + user);
                     } else {
                         out.println("REGISTER_FAILED");
                     }
@@ -51,12 +54,19 @@ public class ClientHandler implements Runnable {
                         out.println("LOGIN_SUCCESS");
                         out.println(role);
                         
-                        // Load old messages in format: username|message|timestamp
+                        // Load old messages
                         ArrayList<String[]> oldMessages = db.loadMessages();
                         for (String[] msg : oldMessages) {
                             out.println(msg[0] + "|" + msg[1] + "|" + msg[2]);
                         }
                         out.println("END_MESSAGES");
+                        
+                        // Mark as authenticated and add to client list
+                        authenticated = true;
+                        ServerNode.addClient(this);
+                        broadcastUserList();
+                        
+                        System.out.println("✅ User logged in: " + username + " (Role: " + role + ")");
                         break;
                     } else {
                         out.println("LOGIN_FAILED");
@@ -64,50 +74,58 @@ public class ClientHandler implements Runnable {
                 }
             }
             
-            // Add to client list
-            ServerNode.addClient(this);
-            broadcastUserList();
-            
-            // Chat loop
-            String msg;
-            while ((msg = in.readLine()) != null) {
-                if (msg.startsWith("BROADCAST|") && role.equals("admin")) {
-                    String broadcastMsg = msg.substring(10);
-                    String timestamp = timeFormat.format(new Date());
-                    String fullMsg = "SYSTEM|🔔 ADMIN BROADCAST: " + broadcastMsg + "|" + timestamp;
-                    
-                    // Save to database
-                    db.saveMessage(0, "SYSTEM", "🔔 ADMIN BROADCAST: " + broadcastMsg);
-                    syncMessage("SYSTEM", "🔔 ADMIN BROADCAST: " + broadcastMsg);
-                    
-                    // Broadcast to all clients
-                    ServerNode.broadcast(fullMsg, this);
-                } else {
-                    String timestamp = timeFormat.format(new Date());
-                    String fullMessage = username + "|" + msg + "|" + timestamp;
-                    
-                    // Save to database
-                    int userId = db.getUserId(username);
-                    db.saveMessage(userId, username, msg);
-                    
-                    // Sync to other server
-                    syncMessage(username, msg);
-                    
-                    // Broadcast to ALL clients (including sender)
-                    ServerNode.broadcastToAll(fullMessage);
+            // Chat loop - only if authenticated
+            if (authenticated) {
+                String msg;
+                while ((msg = in.readLine()) != null) {
+                    if (msg.startsWith("BROADCAST|") && role.equals("admin")) {
+                        String broadcastMsg = msg.substring(10);
+                        String timestamp = timeFormat.format(new Date());
+                        String fullMsg = "SYSTEM|🔔 ADMIN BROADCAST: " + broadcastMsg + "|" + timestamp;
+                        
+                        // Save to database
+                        db.saveMessage(0, "SYSTEM", "🔔 ADMIN BROADCAST: " + broadcastMsg);
+                        syncMessage("SYSTEM", "🔔 ADMIN BROADCAST: " + broadcastMsg);
+                        
+                        // Broadcast to all clients
+                        ServerNode.broadcastToAll(fullMsg);
+                    } else {
+                        String timestamp = timeFormat.format(new Date());
+                        String fullMessage = username + "|" + msg + "|" + timestamp;
+                        
+                        // Save to database
+                        int userId = db.getUserId(username);
+                        db.saveMessage(userId, username, msg);
+                        
+                        // Sync to other server
+                        syncMessage(username, msg);
+                        
+                        // Broadcast to ALL clients (including sender)
+                        ServerNode.broadcastToAll(fullMessage);
+                    }
                 }
             }
             
         } catch (Exception e) {
-            System.out.println(username + " disconnected");
+            System.out.println("❌ Error in ClientHandler for " + username + ": " + e.getMessage());
         } finally {
-            ServerNode.removeClient(this);
-            broadcastUserList();
+            if (authenticated) {
+                ServerNode.removeClient(this);
+                broadcastUserList();
+                System.out.println("👋 User disconnected: " + username);
+            }
+            try {
+                socket.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
     
     public void send(String message) {
-        out.println(message);
+        if (out != null && !socket.isClosed()) {
+            out.println(message);
+        }
     }
     
     public String getUsername() {
@@ -121,6 +139,7 @@ public class ClientHandler implements Runnable {
             users.append(client.getUsername());
         }
         ServerNode.broadcastToAll("USER_LIST|" + users.toString());
+        System.out.println("📋 User list broadcasted: " + users.toString());
     }
     
     private void syncRegister(String username, String password) {
@@ -130,8 +149,9 @@ public class ClientHandler implements Runnable {
             PrintWriter out = new PrintWriter(s.getOutputStream(), true);
             out.println("REGISTER|" + username + "|" + password);
             s.close();
+            System.out.println("🔄 Registration synced to port " + targetPort + " for user: " + username);
         } catch (Exception e) {
-            System.out.println("Sync failed");
+            System.out.println("⚠️ Register Sync failed for " + username + ": " + e.getMessage());
         }
     }
     
@@ -142,8 +162,9 @@ public class ClientHandler implements Runnable {
             PrintWriter out = new PrintWriter(s.getOutputStream(), true);
             out.println("MESSAGE|" + username + "|" + message);
             s.close();
+            System.out.println("🔄 Message synced to port " + targetPort + " from " + username);
         } catch (Exception e) {
-            System.out.println("Sync failed");
+            System.out.println("⚠️ Message Sync failed: " + e.getMessage());
         }
     }
 }

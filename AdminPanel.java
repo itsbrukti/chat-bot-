@@ -1,11 +1,12 @@
 import javax.swing.*;
 import javax.swing.table.*;
+import javax.swing.Timer;
 import java.awt.*;
 import java.awt.event.*;
-import java.io.*;
+import java.io.PrintWriter;
 import java.net.Socket;
-import java.util.List;
-import java.util.Map;
+import java.sql.*;
+import java.util.*;
 import javax.swing.border.*;
 
 public class AdminPanel extends JFrame {
@@ -18,12 +19,14 @@ public class AdminPanel extends JFrame {
     private JLabel statusLabel;
     private Timer refreshTimer;
     private int serverPort;
+    private String dbName;
     
-    public AdminPanel(int serverPort) {
+    public AdminPanel(int serverPort, String dbName) {
         this.serverPort = serverPort;
+        this.dbName = dbName;
         
-        setTitle("Admin Dashboard");
-        setSize(900, 600);
+        setTitle("Admin Dashboard - " + dbName);
+        setSize(1000, 650);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         
@@ -37,11 +40,11 @@ public class AdminPanel extends JFrame {
         headerPanel.setBackground(new Color(0, 122, 255));
         headerPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
         
-        JLabel titleLabel = new JLabel("👑 ADMIN CONTROL PANEL");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        JLabel titleLabel = new JLabel("👑 ADMIN CONTROL PANEL - " + dbName);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         titleLabel.setForeground(Color.WHITE);
         
-        statusLabel = new JLabel("● System Online");
+        statusLabel = new JLabel("● Loading users...");
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         statusLabel.setForeground(Color.WHITE);
         
@@ -52,7 +55,7 @@ public class AdminPanel extends JFrame {
         JPanel tablePanel = new JPanel(new BorderLayout());
         tablePanel.setBackground(new Color(45, 45, 45));
         tablePanel.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createLineBorder(new Color(0, 122, 255)),
+            BorderFactory.createLineBorder(new Color(0, 122, 255), 2),
             "📋 Registered Users",
             TitledBorder.LEFT,
             TitledBorder.TOP,
@@ -60,7 +63,8 @@ public class AdminPanel extends JFrame {
             new Color(0, 122, 255)
         ));
         
-        String[] columns = {"ID", "Username", "Role", "Registration Date"};
+        // Create table with proper columns (without created_at)
+        String[] columns = {"ID", "Username", "Role"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -69,15 +73,21 @@ public class AdminPanel extends JFrame {
         };
         
         userTable = new JTable(tableModel);
-        userTable.setRowHeight(30);
-        userTable.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        userTable.setRowHeight(35);
+        userTable.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         userTable.setBackground(new Color(60, 60, 60));
         userTable.setForeground(Color.WHITE);
         userTable.setSelectionBackground(new Color(0, 122, 255));
         userTable.setSelectionForeground(Color.WHITE);
         userTable.setGridColor(new Color(70, 70, 70));
+        userTable.setShowGrid(true);
         
-        userTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        // Set column widths
+        userTable.getColumnModel().getColumn(0).setPreferredWidth(50);
+        userTable.getColumnModel().getColumn(1).setPreferredWidth(250);
+        userTable.getColumnModel().getColumn(2).setPreferredWidth(100);
+        
+        userTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
         userTable.getTableHeader().setBackground(new Color(0, 122, 255));
         userTable.getTableHeader().setForeground(Color.WHITE);
         userTable.getTableHeader().setReorderingAllowed(false);
@@ -106,7 +116,7 @@ public class AdminPanel extends JFrame {
         statsPanel.setBackground(new Color(45, 45, 45));
         
         JLabel statsLabel = new JLabel("Total Users: 0");
-        statsLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        statsLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
         statsLabel.setForeground(new Color(0, 122, 255));
         statsPanel.add(statsLabel);
         
@@ -122,25 +132,38 @@ public class AdminPanel extends JFrame {
         add(mainPanel);
         
         // Add listeners
-        refreshButton.addActionListener(e -> loadUsersFromServer());
+        refreshButton.addActionListener(e -> loadUsersFromDatabase());
         deleteButton.addActionListener(e -> deleteSelectedUser());
         broadcastButton.addActionListener(e -> showBroadcastDialog());
         
         userTable.getSelectionModel().addListSelectionListener(e -> {
-            deleteButton.setEnabled(userTable.getSelectedRow() != -1);
+            int selectedRow = userTable.getSelectedRow();
+            if (selectedRow != -1) {
+                String username = (String) tableModel.getValueAt(selectedRow, 1);
+                String role = (String) tableModel.getValueAt(selectedRow, 2);
+                deleteButton.setEnabled(!username.equals("admin") && !role.equals("admin"));
+            } else {
+                deleteButton.setEnabled(false);
+            }
         });
         
         tableModel.addTableModelListener(e -> {
             statsLabel.setText("Total Users: " + tableModel.getRowCount());
         });
         
-        // Load users
-        loadUsersFromServer();
+        // Load users initially
+        loadUsersFromDatabase();
         
-        // Auto refresh every 3 seconds
-        refreshTimer = new Timer(3000, e -> loadUsersFromServer());
+        // Setup auto-refresh timer
+        refreshTimer = new Timer(5000, new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                loadUsersFromDatabase();
+            }
+        });
         refreshTimer.start();
         
+        // Clean up timer when window closes
         addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
@@ -157,7 +180,7 @@ public class AdminPanel extends JFrame {
         button.setBackground(bgColor);
         button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
-        button.setBorder(BorderFactory.createEmptyBorder(8, 15, 8, 15));
+        button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
         button.addMouseListener(new MouseAdapter() {
@@ -172,32 +195,45 @@ public class AdminPanel extends JFrame {
         return button;
     }
     
-    private void loadUsersFromServer() {
+    private void loadUsersFromDatabase() {
         SwingUtilities.invokeLater(() -> {
             try {
-                Socket socket = new Socket("localhost", serverPort + 1000);
-                PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                
-                out.println("GET_USERS");
+                statusLabel.setText("● Loading users from " + dbName + "...");
+                statusLabel.setForeground(Color.YELLOW);
                 
                 tableModel.setRowCount(0);
-                String response;
+                int userCount = 0;
                 
-                while (!(response = in.readLine()).equals("END_USERS")) {
-                    String[] userData = response.split("\\|");
-                    if (userData.length == 4) {
-                        tableModel.addRow(new Object[]{
-                            userData[0], userData[1], userData[2], userData[3]
-                        });
-                    }
+                // Connect directly to the database
+                String url = "jdbc:mysql://localhost:3306/" + dbName + "?useSSL=false";
+                Connection conn = DriverManager.getConnection(url, "root", "");
+                
+                Statement stmt = conn.createStatement();
+                // Removed created_at column from query
+                ResultSet rs = stmt.executeQuery("SELECT id, username, role FROM users ORDER BY id");
+                
+                while (rs.next()) {
+                    tableModel.addRow(new Object[]{
+                        rs.getInt("id"),
+                        rs.getString("username"),
+                        rs.getString("role")
+                    });
+                    userCount++;
                 }
                 
-                socket.close();
-                statusLabel.setText("● Updated: " + new java.text.SimpleDateFormat("HH:mm:ss").format(new java.util.Date()));
+                rs.close();
+                stmt.close();
+                conn.close();
                 
-            } catch (Exception e) {
-                statusLabel.setText("⚠ Connection Error");
+                statusLabel.setText("● Connected - " + userCount + " users found");
+                statusLabel.setForeground(new Color(46, 204, 113));
+                
+                System.out.println("✅ Loaded " + userCount + " users from " + dbName);
+                
+            } catch (SQLException e) {
+                statusLabel.setText("⚠ Database error: " + e.getMessage());
+                statusLabel.setForeground(Color.RED);
+                System.err.println("❌ Database error: " + e.getMessage());
                 e.printStackTrace();
             }
         });
@@ -207,55 +243,123 @@ public class AdminPanel extends JFrame {
         int selectedRow = userTable.getSelectedRow();
         if (selectedRow == -1) return;
         
+        int userId = (Integer) tableModel.getValueAt(selectedRow, 0);
         String username = (String) tableModel.getValueAt(selectedRow, 1);
-        String userId = (String) tableModel.getValueAt(selectedRow, 0);
+        String role = (String) tableModel.getValueAt(selectedRow, 2);
         
-        if (username.equals("admin")) {
+        if (role.equals("admin") || username.equals("admin")) {
             JOptionPane.showMessageDialog(this,
-                "Cannot delete admin account!",
-                "Error",
-                JOptionPane.ERROR_MESSAGE);
+                "❌ Cannot delete the main administrator account!",
+                "Delete Denied",
+                JOptionPane.WARNING_MESSAGE);
             return;
         }
         
         int confirm = JOptionPane.showConfirmDialog(this,
-            "Delete user '" + username + "'?",
-            "Confirm Delete",
-            JOptionPane.YES_NO_OPTION);
+            "⚠️ Are you sure you want to delete user '" + username + "'?\n\n" +
+            "This action will:\n" +
+            "• Remove the user account permanently\n" +
+            "• Delete all messages from this user\n" +
+            "• Cannot be undone!",
+            "Confirm Deletion",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE);
         
         if (confirm == JOptionPane.YES_OPTION) {
             try {
-                Socket socket = new Socket("localhost", serverPort + 1000);
-                PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-                BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+                statusLabel.setText("● Deleting user...");
+                statusLabel.setForeground(Color.YELLOW);
                 
-                out.println("DELETE_USER|" + userId + "|" + username);
+                // Delete from current database
+                String url = "jdbc:mysql://localhost:3306/" + dbName + "?useSSL=false";
+                Connection conn = DriverManager.getConnection(url, "root", "");
                 
-                String response = in.readLine();
-                if (response.equals("DELETE_SUCCESS")) {
-                    JOptionPane.showMessageDialog(this, "✅ User deleted successfully!");
-                    loadUsersFromServer();
+                // First delete user's messages
+                PreparedStatement ps1 = conn.prepareStatement("DELETE FROM messages WHERE user_id=?");
+                ps1.setInt(1, userId);
+                int messagesDeleted = ps1.executeUpdate();
+                
+                // Then delete the user
+                PreparedStatement ps2 = conn.prepareStatement("DELETE FROM users WHERE id=? AND username != 'admin'");
+                ps2.setInt(1, userId);
+                int affected = ps2.executeUpdate();
+                
+                conn.close();
+                
+                if (affected > 0) {
+                    JOptionPane.showMessageDialog(this,
+                        "✅ User '" + username + "' has been deleted successfully!\n" +
+                        "Deleted " + messagesDeleted + " messages.",
+                        "Delete Successful",
+                        JOptionPane.INFORMATION_MESSAGE);
+                    
+                    // Refresh user list
+                    loadUsersFromDatabase();
+                    
+                    // Also delete from other database
+                    deleteFromOtherDatabase(userId, username);
+                } else {
+                    JOptionPane.showMessageDialog(this,
+                        "❌ Failed to delete user '" + username + "'!",
+                        "Delete Failed",
+                        JOptionPane.ERROR_MESSAGE);
                 }
                 
-                socket.close();
-            } catch (Exception e) {
+            } catch (SQLException e) {
                 e.printStackTrace();
+                JOptionPane.showMessageDialog(this,
+                    "❌ Database error: " + e.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
             }
         }
     }
     
+    private void deleteFromOtherDatabase(int userId, String username) {
+        String otherDb = dbName.equals("chat_system_1") ? "chat_system_2" : "chat_system_1";
+        
+        try {
+            String url = "jdbc:mysql://localhost:3306/" + otherDb + "?useSSL=false";
+            Connection conn = DriverManager.getConnection(url, "root", "");
+            
+            PreparedStatement ps1 = conn.prepareStatement("DELETE FROM messages WHERE user_id=?");
+            ps1.setInt(1, userId);
+            ps1.executeUpdate();
+            
+            PreparedStatement ps2 = conn.prepareStatement("DELETE FROM users WHERE id=? AND username != 'admin'");
+            ps2.setInt(1, userId);
+            ps2.executeUpdate();
+            
+            conn.close();
+            System.out.println("✅ Also deleted from " + otherDb);
+            
+        } catch (SQLException e) {
+            System.out.println("⚠️ Could not delete from " + otherDb + ": " + e.getMessage());
+        }
+    }
+    
     private void showBroadcastDialog() {
-        String message = JOptionPane.showInputDialog(this, "Enter broadcast message:", "Send Broadcast", JOptionPane.QUESTION_MESSAGE);
+        String message = JOptionPane.showInputDialog(this, 
+            "Enter broadcast message to send to all users:", 
+            "Send Broadcast", 
+            JOptionPane.QUESTION_MESSAGE);
+            
         if (message != null && !message.trim().isEmpty()) {
             try {
                 Socket socket = new Socket("localhost", serverPort);
                 PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
                 out.println("BROADCAST|" + message);
                 socket.close();
-                JOptionPane.showMessageDialog(this, "✅ Broadcast sent to all users!");
+                JOptionPane.showMessageDialog(this, 
+                    "✅ Broadcast sent to all connected users!",
+                    "Success",
+                    JOptionPane.INFORMATION_MESSAGE);
             } catch (Exception e) {
                 e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "❌ Failed to send broadcast!");
+                JOptionPane.showMessageDialog(this, 
+                    "❌ Failed to send broadcast: " + e.getMessage(),
+                    "Error",
+                    JOptionPane.ERROR_MESSAGE);
             }
         }
     }
