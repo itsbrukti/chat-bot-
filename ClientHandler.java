@@ -22,6 +22,11 @@ public class ClientHandler implements Runnable {
         this.serverPort = serverPort;
     }
     
+    private boolean isFailoverActive() {
+        java.io.File markerFile = new java.io.File("failover_mode.txt");
+        return markerFile.exists();
+    }
+    
     @Override
     public void run() {
         try {
@@ -36,12 +41,25 @@ public class ClientHandler implements Runnable {
                 if ("REGISTER".equals(choice)) {
                     String user = in.readLine();
                     String pass = in.readLine();
+                    
+                    // BLOCK registration on main server (port 1234) during failover
+                    if (isFailoverActive() && serverPort == 1234) {
+                        out.println("REGISTER_FAILED");
+                        System.out.println("🚫 REGISTRATION BLOCKED: Main server is in FAILOVER mode");
+                        continue;
+                    }
+                    
                     boolean success = db.registerUser(user, pass);
                     
                     if (success) {
-                        syncRegister(user, pass);
+                        // Only sync if NOT in failover mode
+                        if (!isFailoverActive()) {
+                            syncRegister(user, pass);
+                        } else {
+                            System.out.println("⚠️ Sync skipped during failover mode");
+                        }
                         out.println("REGISTER_SUCCESS");
-                        System.out.println("✅ New user registered: " + user);
+                        System.out.println("✅ New user registered on " + (serverPort == 1234 ? "MAIN" : "BACKUP") + ": " + user);
                     } else {
                         out.println("REGISTER_FAILED");
                     }
@@ -61,12 +79,16 @@ public class ClientHandler implements Runnable {
                         }
                         out.println("END_MESSAGES");
                         
-                        // Mark as authenticated and add to client list
                         authenticated = true;
                         ServerNode.addClient(this);
                         broadcastUserList();
                         
-                        System.out.println("✅ User logged in: " + username + " (Role: " + role + ")");
+                        String serverType = (serverPort == 1234) ? "MAIN" : "BACKUP";
+                        if (isFailoverActive() && serverPort == 1234) {
+                            System.out.println("⚠️ User logged into FAILED main server - this should not happen!");
+                        } else {
+                            System.out.println("✅ User logged in: " + username + " (Role: " + role + ") on " + serverType);
+                        }
                         break;
                     } else {
                         out.println("LOGIN_FAILED");
@@ -78,31 +100,31 @@ public class ClientHandler implements Runnable {
             if (authenticated) {
                 String msg;
                 while ((msg = in.readLine()) != null) {
-                    if (msg.startsWith("BROADCAST|") && role.equals("admin")) {
-                        String broadcastMsg = msg.substring(10);
-                        String timestamp = timeFormat.format(new Date());
-                        String fullMsg = "SYSTEM|🔔 ADMIN BROADCAST: " + broadcastMsg + "|" + timestamp;
-                        
-                        // Save to database
-                        db.saveMessage(0, "SYSTEM", "🔔 ADMIN BROADCAST: " + broadcastMsg);
-                        syncMessage("SYSTEM", "🔔 ADMIN BROADCAST: " + broadcastMsg);
-                        
-                        // Broadcast to all clients
-                        ServerNode.broadcastToAll(fullMsg);
-                    } else {
-                        String timestamp = timeFormat.format(new Date());
-                        String fullMessage = username + "|" + msg + "|" + timestamp;
-                        
-                        // Save to database
-                        int userId = db.getUserId(username);
-                        db.saveMessage(userId, username, msg);
-                        
-                        // Sync to other server
+                    String timestamp = timeFormat.format(new Date());
+                    String fullMessage = username + "|" + msg + "|" + timestamp;
+                    
+                    int userId = db.getUserId(username);
+                    
+                    // Save to current database
+                    db.saveMessage(userId, username, msg);
+                    
+                    // Determine if this is main server (1234) and failover is active
+                    boolean shouldSkipSync = isFailoverActive() && serverPort == 1234;
+                    
+                    if (!shouldSkipSync) {
+                        // Only sync to other server if not in failover mode OR if this is backup server
                         syncMessage(username, msg);
-                        
-                        // Broadcast to ALL clients (including sender)
-                        ServerNode.broadcastToAll(fullMessage);
+                        System.out.println("🔄 Message synced from " + (serverPort == 1234 ? "MAIN" : "BACKUP"));
+                    } else {
+                        System.out.println("🚫 SYNC BLOCKED: Message saved only to " + (serverPort == 1234 ? "MAIN" : "BACKUP") + " during failover");
                     }
+                    
+                    // Broadcast to ALL clients on this server
+                    ServerNode.broadcastToAll(fullMessage);
+                    
+                    System.out.println("💬 Message from " + username + " saved to " + 
+                        (serverPort == 1234 ? "MAIN DB" : "BACKUP DB") + 
+                        (shouldSkipSync ? " (Sync blocked due to failover)" : ""));
                 }
             }
             
@@ -143,6 +165,12 @@ public class ClientHandler implements Runnable {
     }
     
     private void syncRegister(String username, String password) {
+        // Don't sync if failover is active
+        if (isFailoverActive()) {
+            System.out.println("🚫 Registration sync blocked: Failover active");
+            return;
+        }
+        
         int targetPort = (serverPort == 1234) ? 2235 : 2234;
         try {
             Socket s = new Socket("localhost", targetPort);
@@ -156,6 +184,12 @@ public class ClientHandler implements Runnable {
     }
     
     private void syncMessage(String username, String message) {
+        // Don't sync if failover is active
+        if (isFailoverActive()) {
+            System.out.println("🚫 Message sync blocked: Failover active");
+            return;
+        }
+        
         int targetPort = (serverPort == 1234) ? 2235 : 2234;
         try {
             Socket s = new Socket("localhost", targetPort);

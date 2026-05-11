@@ -13,6 +13,11 @@ public class SyncHandler implements Runnable {
         this.db = new DatabaseManager(dbName);
     }
     
+    private boolean isFailoverActive() {
+        File markerFile = new File("failover_mode.txt");
+        return markerFile.exists();
+    }
+    
     @Override
     public void run() {
         try {
@@ -28,6 +33,14 @@ public class SyncHandler implements Runnable {
             System.out.println("📥 Sync received: " + data);
             String[] parts = data.split("\\|");
             
+            // BLOCK all sync operations during failover
+            if (isFailoverActive()) {
+                System.out.println("🚫 SYNC BLOCKED: Failover mode is active - No data syncing");
+                out.println("SYNC_BLOCKED");
+                socket.close();
+                return;
+            }
+            
             switch (parts[0]) {
                 case "REGISTER":
                     boolean regSuccess = db.registerUser(parts[1], parts[2]);
@@ -37,24 +50,21 @@ public class SyncHandler implements Runnable {
                 case "MESSAGE":
                     int userId = db.getUserId(parts[1]);
                     db.saveMessage(userId, parts[1], parts[2]);
-                    System.out.println("💬 Synced message from " + parts[1] + ": " + parts[2]);
+                    System.out.println("💬 Synced message from " + parts[1]);
                     break;
                     
                 case "GET_USERS":
                     System.out.println("📋 Sending user list...");
                     List<Map<String, Object>> users = db.getAllUsers();
-                    int userCount = 0;
                     for (Map<String, Object> user : users) {
                         String userData = user.get("id") + "|" + 
                                          user.get("username") + "|" + 
                                          user.get("role") + "|" + 
                                          user.get("created_at");
                         out.println(userData);
-                        userCount++;
-                        System.out.println("   Sent user: " + user.get("username"));
                     }
                     out.println("END_USERS");
-                    System.out.println("✅ User list sent. Total: " + userCount);
+                    System.out.println("✅ User list sent. Total: " + users.size());
                     break;
                     
                 case "DELETE_USER":
@@ -62,7 +72,7 @@ public class SyncHandler implements Runnable {
                     String usernameToDelete = parts[2];
                     boolean deleted = db.deleteUser(userIdToDelete, usernameToDelete);
                     out.println(deleted ? "DELETE_SUCCESS" : "DELETE_FAILED");
-                    System.out.println("🗑️ Delete user: " + usernameToDelete + " - " + (deleted ? "Success" : "Failed"));
+                    System.out.println("🗑️ Delete user: " + usernameToDelete);
                     break;
                     
                 default:
