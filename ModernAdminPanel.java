@@ -8,7 +8,7 @@ import java.util.*;
 import java.io.*;
 import javax.swing.border.*;
 
-public class AdminPanel extends JFrame {
+public class ModernAdminPanel extends JFrame {
     
     private JTable userTable;
     private DefaultTableModel tableModel;
@@ -24,37 +24,44 @@ public class AdminPanel extends JFrame {
     private JLabel masterLabel;
     private static boolean failoverActive = false;
     private JLabel failoverStatusLabel;
+    private static boolean isOpen = false;
     
-    public AdminPanel(int serverPort, String dbName) {
+    public ModernAdminPanel(int serverPort, String dbName) {
+        // Prevent multiple instances
+        if (isOpen) {
+            return;
+        }
+        isOpen = true;
+        
         this.serverPort = serverPort;
         this.dbName = dbName;
         
-        setTitle("Admin Dashboard - Failover Management");
-        setSize(1200, 750);
+        setTitle("Admin Dashboard - " + dbName);
+        setSize(1300, 800);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
         
-        // Main panel
-        JPanel mainPanel = new JPanel(new BorderLayout(10, 10));
-        mainPanel.setBackground(new Color(34, 34, 34));
-        mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        // Main panel - Dark elegant background
+        JPanel mainPanel = new JPanel(new BorderLayout(15, 15));
+        mainPanel.setBackground(new Color(28, 28, 32));
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
         
         // Header
         JPanel headerPanel = createHeaderPanel();
         mainPanel.add(headerPanel, BorderLayout.NORTH);
         
-        // Create split pane for users and logs
+        // Create split pane
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
-        splitPane.setResizeWeight(0.6);
-        splitPane.setDividerSize(5);
+        splitPane.setResizeWeight(0.65);
+        splitPane.setDividerSize(8);
+        splitPane.setBorder(null);
         
         // Top panel - User table
         JPanel topPanel = createUserTablePanel();
+        splitPane.setTopComponent(topPanel);
         
         // Bottom panel - Logs and controls
         JPanel bottomPanel = createBottomPanel();
-        
-        splitPane.setTopComponent(topPanel);
         splitPane.setBottomComponent(bottomPanel);
         
         mainPanel.add(splitPane, BorderLayout.CENTER);
@@ -81,6 +88,7 @@ public class AdminPanel extends JFrame {
                 if (refreshTimer != null) {
                     refreshTimer.stop();
                 }
+                isOpen = false;
             }
         });
     }
@@ -95,26 +103,26 @@ public class AdminPanel extends JFrame {
     
     private JPanel createHeaderPanel() {
         JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBackground(new Color(0, 122, 255));
-        headerPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        headerPanel.setBackground(new Color(52, 73, 94));
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(20, 25, 20, 25));
         
         JLabel titleLabel = new JLabel("🏥 DATABASE FAILOVER MANAGEMENT SYSTEM");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        titleLabel.setForeground(Color.WHITE);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        titleLabel.setForeground(Color.BLACK);
         
-        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
-        rightPanel.setBackground(new Color(0, 122, 255));
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 20, 0));
+        rightPanel.setBackground(new Color(52, 73, 94));
         
         masterLabel = new JLabel("● Checking master status...");
         masterLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        masterLabel.setForeground(Color.WHITE);
+        masterLabel.setForeground(Color.BLACK);
         
         failoverStatusLabel = new JLabel("");
         failoverStatusLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
         
         statusLabel = new JLabel("● System Online");
         statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        statusLabel.setForeground(Color.WHITE);
+        statusLabel.setForeground(Color.BLACK);
         
         rightPanel.add(masterLabel);
         rightPanel.add(failoverStatusLabel);
@@ -128,15 +136,17 @@ public class AdminPanel extends JFrame {
     
     private JPanel createUserTablePanel() {
         JPanel panel = new JPanel(new BorderLayout());
-        panel.setBackground(new Color(45, 45, 45));
-        panel.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createLineBorder(new Color(0, 122, 255), 2),
-            "📋 Registered Users",
-            TitledBorder.LEFT,
-            TitledBorder.TOP,
-            new Font("Segoe UI", Font.BOLD, 14),
-            new Color(0, 122, 255)
+        panel.setBackground(new Color(38, 38, 43));
+        panel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(52, 73, 94), 2),
+            BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
+        
+        JLabel titleLabel = new JLabel("📋 REGISTERED USERS");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titleLabel.setForeground(new Color(52, 152, 219));
+        titleLabel.setBorder(BorderFactory.createEmptyBorder(0, 0, 15, 0));
+        panel.add(titleLabel, BorderLayout.NORTH);
         
         String[] columns = {"ID", "Username", "Role", "Registration Date"};
         tableModel = new DefaultTableModel(columns, 0) {
@@ -147,51 +157,72 @@ public class AdminPanel extends JFrame {
         };
         
         userTable = new JTable(tableModel);
-        userTable.setRowHeight(35);
+        userTable.setRowHeight(40);
         userTable.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        userTable.setBackground(new Color(60, 60, 60));
-        userTable.setForeground(Color.WHITE);
-        userTable.setSelectionBackground(new Color(0, 122, 255));
-        userTable.setSelectionForeground(Color.WHITE);
-        userTable.setGridColor(new Color(70, 70, 70));
+        userTable.setBackground(new Color(45, 45, 50));
+        userTable.setForeground(Color.BLACK);
+        userTable.setSelectionBackground(new Color(52, 152, 219));
+        userTable.setSelectionForeground(Color.BLACK);
+        userTable.setGridColor(new Color(60, 60, 65));
         userTable.setShowGrid(true);
         
-        userTable.getColumnModel().getColumn(0).setPreferredWidth(50);
+        // Custom renderer for Role column
+        userTable.getColumn("Role").setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value, 
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                String role = (String) value;
+                if (!isSelected) {
+                    if (role.equals("admin")) {
+                        setBackground(new Color(231, 76, 60));
+                        setForeground(Color.BLACK);
+                        setFont(getFont().deriveFont(Font.BOLD));
+                    } else {
+                        setBackground(new Color(46, 204, 113));
+                        setForeground(Color.BLACK);
+                    }
+                    setHorizontalAlignment(JLabel.CENTER);
+                }
+                return c;
+            }
+        });
+        
+        userTable.getColumnModel().getColumn(0).setPreferredWidth(60);
         userTable.getColumnModel().getColumn(1).setPreferredWidth(200);
         userTable.getColumnModel().getColumn(2).setPreferredWidth(100);
-        userTable.getColumnModel().getColumn(3).setPreferredWidth(200);
+        userTable.getColumnModel().getColumn(3).setPreferredWidth(250);
         
         userTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
-        userTable.getTableHeader().setBackground(new Color(0, 122, 255));
-        userTable.getTableHeader().setForeground(Color.WHITE);
+        userTable.getTableHeader().setBackground(new Color(52, 73, 94));
+        userTable.getTableHeader().setForeground(Color.BLACK);
+        userTable.getTableHeader().setPreferredSize(new Dimension(0, 40));
         
         JScrollPane scrollPane = new JScrollPane(userTable);
-        scrollPane.getViewport().setBackground(new Color(60, 60, 60));
+        scrollPane.setBorder(BorderFactory.createLineBorder(new Color(52, 73, 94)));
+        scrollPane.getViewport().setBackground(new Color(45, 45, 50));
+        
         panel.add(scrollPane, BorderLayout.CENTER);
         
         return panel;
     }
     
     private JPanel createBottomPanel() {
-        JPanel bottomPanel = new JPanel(new BorderLayout(10, 10));
-        bottomPanel.setBackground(new Color(45, 45, 45));
-        bottomPanel.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createLineBorder(new Color(0, 122, 255), 2),
-            "🛠️ System Controls & Logs",
-            TitledBorder.LEFT,
-            TitledBorder.TOP,
-            new Font("Segoe UI", Font.BOLD, 14),
-            new Color(0, 122, 255)
+        JPanel bottomPanel = new JPanel(new BorderLayout(15, 15));
+        bottomPanel.setBackground(new Color(38, 38, 43));
+        bottomPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(52, 73, 94), 2),
+            BorderFactory.createEmptyBorder(15, 15, 15, 15)
         ));
         
         // Button panel
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        buttonPanel.setBackground(new Color(45, 45, 45));
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
+        buttonPanel.setBackground(new Color(38, 38, 43));
         
-        refreshButton = createStyledButton("🔄 Refresh Users", new Color(0, 122, 255));
-        deleteButton = createStyledButton("🗑️ Delete User", new Color(231, 76, 60));
-        failoverButton = createStyledButton("⚠️ SIMULATE FAILOVER - Main DB FAILS", new Color(243, 156, 18));
-        recoverButton = createStyledButton("🔧 RECOVER & SYNC - Restore Main DB", new Color(46, 204, 113));
+        refreshButton = createStyledButton("🔄 REFRESH USERS", new Color(52, 152, 219));
+        deleteButton = createStyledButton("🗑️ DELETE SELECTED USER", new Color(231, 76, 60));
+        failoverButton = createStyledButton("⚠️ SIMULATE FAILOVER", new Color(243, 156, 18));
+        recoverButton = createStyledButton("🔧 RECOVER & SYNC", new Color(46, 204, 113));
         
         deleteButton.setEnabled(false);
         
@@ -202,37 +233,43 @@ public class AdminPanel extends JFrame {
         
         // Stats panel
         JPanel statsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        statsPanel.setBackground(new Color(45, 45, 45));
+        statsPanel.setBackground(new Color(38, 38, 43));
         
-        JLabel statsLabel = new JLabel("Total Users: 0");
-        statsLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        statsLabel.setForeground(new Color(0, 122, 255));
+        JLabel statsLabel = new JLabel("📊 TOTAL USERS: 0");
+        statsLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        statsLabel.setForeground(new Color(52, 152, 219));
         statsPanel.add(statsLabel);
         
         tableModel.addTableModelListener(e -> {
-            statsLabel.setText("Total Users: " + tableModel.getRowCount());
+            statsLabel.setText("📊 TOTAL USERS: " + tableModel.getRowCount());
         });
         
         // Log area
-        logArea = new JTextArea();
-        logArea.setEditable(false);
-        logArea.setBackground(new Color(30, 30, 30));
-        logArea.setForeground(new Color(46, 204, 113));
-        logArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        logArea.setBorder(BorderFactory.createLineBorder(new Color(70, 70, 70)));
-        
-        JScrollPane logScroll = new JScrollPane(logArea);
-        logScroll.setPreferredSize(new Dimension(0, 200));
-        logScroll.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createLineBorder(new Color(0, 122, 255)),
-            "System Log",
+        JPanel logPanel = new JPanel(new BorderLayout());
+        logPanel.setBackground(new Color(38, 38, 43));
+        logPanel.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createLineBorder(new Color(52, 152, 219)),
+            "📝 SYSTEM ACTIVITY LOG",
             TitledBorder.LEFT,
             TitledBorder.TOP,
-            new Font("Segoe UI", Font.BOLD, 11),
-            new Color(0, 122, 255)
+            new Font("Segoe UI", Font.BOLD, 12),
+            new Color(52, 152, 219)
         ));
         
-        // Add listeners
+        logArea = new JTextArea();
+        logArea.setEditable(false);
+        logArea.setBackground(new Color(25, 25, 30));
+        logArea.setForeground(new Color(0, 255, 127));
+        logArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        logArea.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        
+        JScrollPane logScroll = new JScrollPane(logArea);
+        logScroll.setBorder(null);
+        logScroll.getViewport().setBackground(new Color(25, 25, 30));
+        
+        logPanel.add(logScroll, BorderLayout.CENTER);
+        
+        // Button actions
         refreshButton.addActionListener(e -> loadUsersFromDatabase());
         deleteButton.addActionListener(e -> deleteSelectedUser());
         failoverButton.addActionListener(e -> simulateFailover());
@@ -250,31 +287,34 @@ public class AdminPanel extends JFrame {
         });
         
         JPanel topControls = new JPanel(new BorderLayout());
-        topControls.setBackground(new Color(45, 45, 45));
+        topControls.setBackground(new Color(38, 38, 43));
         topControls.add(buttonPanel, BorderLayout.WEST);
         topControls.add(statsPanel, BorderLayout.EAST);
         
         bottomPanel.add(topControls, BorderLayout.NORTH);
-        bottomPanel.add(logScroll, BorderLayout.CENTER);
+        bottomPanel.add(logPanel, BorderLayout.CENTER);
         
         return bottomPanel;
     }
     
     private JButton createStyledButton(String text, Color bgColor) {
         JButton button = new JButton(text);
-        button.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        button.setFont(new Font("Segoe UI", Font.BOLD, 13));
         button.setBackground(bgColor);
-        button.setForeground(Color.WHITE);
+        button.setForeground(Color.BLACK);
         button.setFocusPainted(false);
-        button.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        button.setBorder(BorderFactory.createEmptyBorder(12, 25, 12, 25));
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
+        // Add hover effect
         button.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) {
                 button.setBackground(bgColor.darker());
+                button.setFont(button.getFont().deriveFont(Font.BOLD, 14));
             }
             public void mouseExited(MouseEvent e) {
                 button.setBackground(bgColor);
+                button.setFont(button.getFont().deriveFont(Font.BOLD, 13));
             }
         });
         
@@ -331,13 +371,15 @@ public class AdminPanel extends JFrame {
                     failoverStatusLabel.setText("🔴 FAILOVER ACTIVE");
                     failoverStatusLabel.setForeground(Color.RED);
                 } else {
-                    statusLabel.setText("● Online - " + userCount + " users");
+                    statusLabel.setText("● ONLINE - " + userCount + " users");
                     statusLabel.setForeground(new Color(46, 204, 113));
                     failoverStatusLabel.setText("");
                 }
                 
+                addLog("✅ Loaded " + userCount + " users from " + targetDb);
+                
             } catch (SQLException e) {
-                statusLabel.setText("⚠ Database Connection Error");
+                statusLabel.setText("⚠ DATABASE CONNECTION ERROR");
                 statusLabel.setForeground(Color.RED);
                 addLog("❌ Database connection failed: " + e.getMessage());
             }
@@ -346,14 +388,13 @@ public class AdminPanel extends JFrame {
     
     private void checkMasterStatus() {
         try {
-            // Try to connect to main database
             String url = "jdbc:mysql://localhost:3306/chat_system_1?useSSL=false";
             Connection conn = DriverManager.getConnection(url, "root", "");
             conn.close();
             
             if (failoverActive) {
-                masterLabel.setText("⚠ MAIN DB: FAILED (Simulated) - Using BACKUP");
-                masterLabel.setForeground(Color.RED);
+                masterLabel.setText("⚠ MAIN DB: SIMULATED FAILURE - Using BACKUP");
+                masterLabel.setForeground(Color.YELLOW);
             } else {
                 masterLabel.setText("● MAIN DB: ACTIVE");
                 masterLabel.setForeground(new Color(46, 204, 113));
@@ -366,59 +407,33 @@ public class AdminPanel extends JFrame {
     
     private void simulateFailover() {
         int confirm = JOptionPane.showConfirmDialog(this,
-            "⚠️ SIMULATE COMPLETE MAIN DATABASE FAILURE\n\n" +
-            "THIS WILL:\n" +
-            "• Completely BLOCK access to main database (chat_system_1)\n" +
-            "• Prevent ANY operations (read/write) on main database\n" +
-            "• Force ALL operations to use backup database (chat_system_2)\n" +
-            "• Main database will receive NO new data\n\n" +
-            "NEW USERS REGISTERED DURING FAILOVER WILL ONLY APPEAR IN BACKUP\n\n" +
-            "Continue with failover simulation?",
-            "Simulate Database Failure",
+            "⚠️ SIMULATE MAIN DATABASE FAILURE\n\n" +
+            "• Main database will be BLOCKED\n" +
+            "• All operations go to BACKUP\n" +
+            "• No new data to main DB\n\n" +
+            "Continue?",
+            "Failover Simulation",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.WARNING_MESSAGE);
         
         if (confirm == JOptionPane.YES_OPTION) {
             failoverActive = true;
             
-            addLog("🔴 🔴 🔴 COMPLETE MAIN DATABASE FAILURE SIMULATED 🔴 🔴 🔴");
-            addLog("❌ MAIN DATABASE (chat_system_1) is now COMPLETELY INACCESSIBLE");
-            addLog("🚫 NO read or write operations allowed on main database");
-            addLog("🟢 ALL operations forced to BACKUP database (chat_system_2)");
-            addLog("📝 New users registered will ONLY appear in backup database");
-            addLog("⚠️ Main database will receive NO updates until recovery");
+            addLog("🔴🔴🔴 MAIN DATABASE FAILURE SIMULATED 🔴🔴🔴");
+            addLog("❌ Main database is now COMPLETELY INACCESSIBLE");
+            addLog("🟢 ALL operations forced to BACKUP database");
+            addLog("📝 New users will ONLY appear in backup database");
             
-            // Create marker file to indicate failover
             try {
                 FileWriter fw = new FileWriter("failover_mode.txt");
                 fw.write("active");
                 fw.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            
-            // Try to drop the main database connection to simulate failure
-            try {
-                Connection conn = DriverManager.getConnection("jdbc:mysql://localhost:3306/chat_system_1?useSSL=false", "root", "");
-                Statement stmt = conn.createStatement();
-                // This will effectively block writes to main db by renaming it
-                stmt.execute("RENAME TABLE users TO users_failed");
-                stmt.execute("RENAME TABLE messages TO messages_failed");
-                conn.close();
-                addLog("🔒 Main database tables have been locked/renamed - writes blocked");
-            } catch (SQLException e) {
-                addLog("✅ Main database is now OFFLINE (simulated)");
-            }
+            } catch (IOException e) {}
             
             JOptionPane.showMessageDialog(this,
-                "✅ COMPLETE MAIN DATABASE FAILURE SIMULATED!\n\n" +
-                "chat_system_1 is now COMPLETELY INACCESSIBLE.\n" +
-                "• NO reads allowed\n" +
-                "• NO writes allowed\n" +
-                "• NO new users can be added to main DB\n\n" +
-                "chat_system_2 is now the ONLY active database.\n\n" +
-                "All operations are using the backup database.\n\n" +
-                "Click 'RECOVER & SYNC' to restore the main database.",
+                "✅ FAILOVER SIMULATED!\n\n" +
+                "Backup database is now ACTIVE.\n" +
+                "Click 'RECOVER & SYNC' to restore.",
                 "Failover Active",
                 JOptionPane.WARNING_MESSAGE);
             
@@ -430,48 +445,31 @@ public class AdminPanel extends JFrame {
     private void recoverAndSync() {
         int confirm = JOptionPane.showConfirmDialog(this,
             "🔧 DATABASE RECOVERY AND SYNC\n\n" +
-            "This will RECOVER the main database and SYNC all data:\n\n" +
-            "STEP 1: Restore main database tables\n" +
-            "STEP 2: Copy ALL data from backup (chat_system_2) to main (chat_system_1)\n" +
-            "STEP 3: This includes ALL users registered during failure\n" +
-            "STEP 4: This includes ALL messages sent during failure\n" +
-            "STEP 5: Make chat_system_1 the ACTIVE MASTER again\n\n" +
-            "No data will be lost - everything from backup will be synced.\n\n" +
-            "Proceed with recovery?",
-            "Recover and Sync",
+            "• Copy ALL data from backup to main\n" +
+            "• Include users registered during failure\n" +
+            "• Include messages sent during failure\n" +
+            "• Make both databases IDENTICAL\n\n" +
+            "Proceed?",
+            "Database Recovery",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.INFORMATION_MESSAGE);
         
         if (confirm == JOptionPane.YES_OPTION) {
-            addLog("🔄 STARTING DATABASE RECOVERY PROCESS...");
-            addLog("📥 Preparing to copy ALL data from backup to main database");
+            addLog("🔄 STARTING DATABASE RECOVERY...");
+            addLog("📥 Copying ALL data from backup to main database");
             
             try {
-                // First, restore the main database tables
-                addLog("🔧 Restoring main database tables...");
                 Connection mainConn = DriverManager.getConnection("jdbc:mysql://localhost:3306/chat_system_1?useSSL=false", "root", "");
-                Statement restoreStmt = mainConn.createStatement();
-                
-                try {
-                    restoreStmt.execute("RENAME TABLE users_failed TO users");
-                    restoreStmt.execute("RENAME TABLE messages_failed TO messages");
-                    addLog("✅ Main database tables restored");
-                } catch (SQLException e) {
-                    addLog("ℹ️ Tables already in normal state, proceeding with sync");
-                }
-                
-                // Clear main database
-                addLog("🗑️ Clearing main database for fresh sync...");
-                restoreStmt.execute("SET FOREIGN_KEY_CHECKS=0");
-                restoreStmt.execute("TRUNCATE TABLE messages");
-                restoreStmt.execute("TRUNCATE TABLE users");
-                restoreStmt.execute("SET FOREIGN_KEY_CHECKS=1");
-                
-                // Connect to backup database
                 Connection backupConn = DriverManager.getConnection("jdbc:mysql://localhost:3306/chat_system_2?useSSL=false", "root", "");
                 
-                // Copy users from backup to main
-                addLog("📋 Copying users from backup database...");
+                // Clear main database
+                Statement clearStmt = mainConn.createStatement();
+                clearStmt.execute("SET FOREIGN_KEY_CHECKS=0");
+                clearStmt.execute("TRUNCATE TABLE messages");
+                clearStmt.execute("TRUNCATE TABLE users");
+                clearStmt.execute("SET FOREIGN_KEY_CHECKS=1");
+                
+                // Copy users
                 Statement backupStmt = backupConn.createStatement();
                 ResultSet usersRs = backupStmt.executeQuery("SELECT * FROM users");
                 PreparedStatement insertUser = mainConn.prepareStatement(
@@ -490,8 +488,7 @@ public class AdminPanel extends JFrame {
                 }
                 addLog("✅ Copied " + userCount + " users to main database");
                 
-                // Copy messages from backup to main
-                addLog("💬 Copying messages from backup database...");
+                // Copy messages
                 ResultSet messagesRs = backupStmt.executeQuery("SELECT * FROM messages");
                 PreparedStatement insertMessage = mainConn.prepareStatement(
                     "INSERT INTO messages(id, user_id, username, message, timestamp) VALUES(?,?,?,?,?)"
@@ -512,29 +509,22 @@ public class AdminPanel extends JFrame {
                 backupConn.close();
                 mainConn.close();
                 
-                // Remove failover marker
                 File markerFile = new File("failover_mode.txt");
-                if (markerFile.exists()) {
-                    markerFile.delete();
-                }
+                if (markerFile.exists()) markerFile.delete();
                 
                 failoverActive = false;
                 
-                addLog("✅ ✅ ✅ RECOVERY COMPLETE! ✅ ✅ ✅");
-                addLog("👑 chat_system_1 is now the ACTIVE MASTER again");
+                addLog("✅✅✅ RECOVERY COMPLETE! ✅✅✅");
+                addLog("👑 Main database is now ACTIVE MASTER again");
                 addLog("🔄 Both databases are now FULLY SYNCHRONIZED");
-                addLog("📊 Total users in main DB: " + userCount);
-                addLog("💬 Total messages in main DB: " + msgCount);
-                addLog("💡 All data from the failure period has been restored!");
+                addLog("📊 Users: " + userCount + " | Messages: " + msgCount);
                 
                 JOptionPane.showMessageDialog(this,
-                    "✅ DATABASE RECOVERY COMPLETE!\n\n" +
-                    "chat_system_1 has been FULLY RESTORED and SYNCHRONIZED.\n" +
-                    "chat_system_1 is now the ACTIVE MASTER database again.\n\n" +
-                    "Data recovered from backup:\n" +
-                    "• Users: " + userCount + "\n" +
-                    "• Messages: " + msgCount + "\n\n" +
-                    "BOTH DATABASES ARE NOW IDENTICAL!",
+                    "✅ RECOVERY COMPLETE!\n\n" +
+                    "Main database restored!\n" +
+                    "Users: " + userCount + "\n" +
+                    "Messages: " + msgCount + "\n\n" +
+                    "Both databases are now IDENTICAL!",
                     "Recovery Complete",
                     JOptionPane.INFORMATION_MESSAGE);
                 
@@ -543,7 +533,6 @@ public class AdminPanel extends JFrame {
                 
             } catch (SQLException e) {
                 addLog("❌ Recovery failed: " + e.getMessage());
-                e.printStackTrace();
                 JOptionPane.showMessageDialog(this,
                     "❌ Recovery failed: " + e.getMessage(),
                     "Error",
@@ -554,7 +543,10 @@ public class AdminPanel extends JFrame {
     
     private void deleteSelectedUser() {
         int selectedRow = userTable.getSelectedRow();
-        if (selectedRow == -1) return;
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Please select a user to delete!", "No Selection", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
         
         int userId = (Integer) tableModel.getValueAt(selectedRow, 0);
         String username = (String) tableModel.getValueAt(selectedRow, 1);
@@ -569,7 +561,7 @@ public class AdminPanel extends JFrame {
         }
         
         int confirm = JOptionPane.showConfirmDialog(this,
-            "⚠️ Delete user '" + username + "'?\nThis cannot be undone!",
+            "⚠️ Delete user '" + username + "'?\nThis will also delete all their messages!\nThis cannot be undone!",
             "Confirm Deletion",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.WARNING_MESSAGE);
@@ -583,7 +575,7 @@ public class AdminPanel extends JFrame {
                 
                 PreparedStatement ps1 = conn.prepareStatement("DELETE FROM messages WHERE user_id=?");
                 ps1.setInt(1, userId);
-                ps1.executeUpdate();
+                int messagesDeleted = ps1.executeUpdate();
                 
                 PreparedStatement ps2 = conn.prepareStatement("DELETE FROM users WHERE id=? AND username != 'admin'");
                 ps2.setInt(1, userId);
@@ -593,12 +585,14 @@ public class AdminPanel extends JFrame {
                 
                 if (affected > 0) {
                     if (failoverActive) {
-                        addLog("🗑️ Deleted user: " + username + " from BACKUP database only (Main is OFFLINE)");
+                        addLog("🗑️ Deleted user: " + username + " from BACKUP database only (Deleted " + messagesDeleted + " messages)");
                     } else {
-                        addLog("🗑️ Deleted user: " + username);
+                        addLog("🗑️ Deleted user: " + username + " (Deleted " + messagesDeleted + " messages)");
                     }
-                    JOptionPane.showMessageDialog(this, "✅ User deleted from " + targetDb);
+                    JOptionPane.showMessageDialog(this, "✅ User '" + username + "' deleted successfully!");
                     loadUsersFromDatabase();
+                } else {
+                    JOptionPane.showMessageDialog(this, "❌ Failed to delete user!");
                 }
                 
             } catch (SQLException e) {
