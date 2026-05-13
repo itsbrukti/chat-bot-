@@ -15,6 +15,7 @@ public class ClientHandler implements Runnable {
     private int serverPort;
     private SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss");
     private boolean authenticated = false;
+    private boolean isDeleted = false;
     
     public ClientHandler(Socket socket, String dbName, int serverPort) {
         this.socket = socket;
@@ -52,11 +53,12 @@ public class ClientHandler implements Runnable {
                     boolean success = db.registerUser(user, pass);
                     
                     if (success) {
-                        // Only sync if NOT in failover mode
+                        // Always sync registration to backup if not in failover
                         if (!isFailoverActive()) {
                             syncRegister(user, pass);
-                        } else {
-                            System.out.println("⚠️ Sync skipped during failover mode");
+                        } else if (serverPort == 1235) {
+                            // If this is backup during failover, don't sync to main
+                            System.out.println("⚠️ Registration on backup during failover - will sync later");
                         }
                         out.println("REGISTER_SUCCESS");
                         System.out.println("✅ New user registered on " + (serverPort == 1234 ? "MAIN" : "BACKUP") + ": " + user);
@@ -69,6 +71,13 @@ public class ClientHandler implements Runnable {
                     role = db.loginUser(username, password);
                     
                     if (role != null) {
+                        // Check if user was deleted during session
+                        if (!db.userExists(username)) {
+                            out.println("LOGIN_FAILED");
+                            out.println("USER_DELETED");
+                            return;
+                        }
+                        
                         out.println("LOGIN_SUCCESS");
                         out.println(role);
                         
@@ -84,11 +93,7 @@ public class ClientHandler implements Runnable {
                         broadcastUserList();
                         
                         String serverType = (serverPort == 1234) ? "MAIN" : "BACKUP";
-                        if (isFailoverActive() && serverPort == 1234) {
-                            System.out.println("⚠️ User logged into FAILED main server - this should not happen!");
-                        } else {
-                            System.out.println("✅ User logged in: " + username + " (Role: " + role + ") on " + serverType);
-                        }
+                        System.out.println("✅ User logged in: " + username + " (Role: " + role + ") on " + serverType);
                         break;
                     } else {
                         out.println("LOGIN_FAILED");
@@ -96,10 +101,18 @@ public class ClientHandler implements Runnable {
                 }
             }
             
-            // Chat loop - only if authenticated
+            // Chat loop - only if authenticated and not deleted
             if (authenticated) {
                 String msg;
                 while ((msg = in.readLine()) != null) {
+                    // Check if user still exists before processing message
+                    if (!db.userExists(username)) {
+                        out.println("USER_DELETED");
+                        out.println("DISCONNECT");
+                        isDeleted = true;
+                        break;
+                    }
+                    
                     String timestamp = timeFormat.format(new Date());
                     String fullMessage = username + "|" + msg + "|" + timestamp;
                     
@@ -131,10 +144,17 @@ public class ClientHandler implements Runnable {
         } catch (Exception e) {
             System.out.println("❌ Error in ClientHandler for " + username + ": " + e.getMessage());
         } finally {
-            if (authenticated) {
+            if (authenticated && !isDeleted) {
                 ServerNode.removeClient(this);
                 broadcastUserList();
                 System.out.println("👋 User disconnected: " + username);
+            } else if (isDeleted) {
+                System.out.println("🗑️ User removed from active chats: " + username);
+                // Force disconnect and close dashboard
+                out.println("DISCONNECT");
+                out.println("USER_DELETED");
+                ServerNode.removeClient(this);
+                broadcastUserList();
             }
             try {
                 socket.close();
@@ -145,7 +165,7 @@ public class ClientHandler implements Runnable {
     }
     
     public void send(String message) {
-        if (out != null && !socket.isClosed()) {
+        if (out != null && !socket.isClosed() && !isDeleted) {
             out.println(message);
         }
     }
@@ -164,41 +184,31 @@ public class ClientHandler implements Runnable {
         System.out.println("📋 User list broadcasted: " + users.toString());
     }
     
-    private void syncRegister(String username, String password) {
-        // Don't sync if failover is active
-        if (isFailoverActive()) {
-            System.out.println("🚫 Registration sync blocked: Failover active");
-            return;
-        }
-        
-        int targetPort = (serverPort == 1234) ? 2235 : 2234;
-        try {
-            Socket s = new Socket("localhost", targetPort);
-            PrintWriter out = new PrintWriter(s.getOutputStream(), true);
-            out.println("REGISTER|" + username + "|" + password);
-            s.close();
-            System.out.println("🔄 Registration synced to port " + targetPort + " for user: " + username);
-        } catch (Exception e) {
-            System.out.println("⚠️ Register Sync failed for " + username + ": " + e.getMessage());
-        }
+    // This method syncs REGISTRATION from MAIN to BACKUP
+private void syncRegister(String username, String password) {
+    if (isFailoverActive()) return;
+    int targetPort = (serverPort == 1234) ? 2235 : 2234;  // If MAIN (1234), send to BACKUP sync port (2235)
+    try {
+        Socket s = new Socket("localhost", targetPort);
+        PrintWriter out = new PrintWriter(s.getOutputStream(), true);
+        out.println("REGISTER|" + username + "|" + password);
+        s.close();
+    } catch (Exception e) {
+        System.out.println("⚠️ Register Sync failed: " + e.getMessage());
     }
-    
-    private void syncMessage(String username, String message) {
-        // Don't sync if failover is active
-        if (isFailoverActive()) {
-            System.out.println("🚫 Message sync blocked: Failover active");
-            return;
-        }
-        
-        int targetPort = (serverPort == 1234) ? 2235 : 2234;
-        try {
-            Socket s = new Socket("localhost", targetPort);
-            PrintWriter out = new PrintWriter(s.getOutputStream(), true);
-            out.println("MESSAGE|" + username + "|" + message);
-            s.close();
-            System.out.println("🔄 Message synced to port " + targetPort + " from " + username);
-        } catch (Exception e) {
-            System.out.println("⚠️ Message Sync failed: " + e.getMessage());
-        }
+}
+
+// This method syncs MESSAGES from MAIN to BACKUP
+private void syncMessage(String username, String message) {
+    if (isFailoverActive()) return;
+    int targetPort = (serverPort == 1234) ? 2235 : 2234;  // If MAIN (1234), send to BACKUP sync port (2235)
+    try {
+        Socket s = new Socket("localhost", targetPort);
+        PrintWriter out = new PrintWriter(s.getOutputStream(), true);
+        out.println("MESSAGE|" + username + "|" + message);
+        s.close();
+    } catch (Exception e) {
+        System.out.println("⚠️ Message Sync failed: " + e.getMessage());
     }
+}
 }
